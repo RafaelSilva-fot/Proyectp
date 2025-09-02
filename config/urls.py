@@ -18,7 +18,12 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from analisis import views  # ✅ Importa las vistas directamente
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('subir/', include('analisis.urls')),
+    # ✅ AÑADE ESTAS URLs DIRECTAMENTE:
+    path('elegir-ngrama/<int:pk>/', views.elegir_ngrama, name='elegir_ngrama'),
+    path('histograma-ngramas/<int:pk>/<int:n>/', views.histograma_ngramas, name='histograma_ngramas'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

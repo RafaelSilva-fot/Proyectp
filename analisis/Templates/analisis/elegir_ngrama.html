@@ -1,0 +1,29 @@
+
+{% block content %}
+<h2>Elegir N-Gramas para: {{ texto.titulo }}</h2>
+
+<form method="post">
+    {% csrf_token %}
+    
+    <div class="form-group">
+        <label for="id_n_valor">Seleccione el valor de n:</label>
+        {{ form.n_valor }}
+        <small class="form-text text-muted">
+            {{ form.n_valor.help_text }}
+        </small>
+    </div>
+    
+    <button type="submit" class="btn btn-primary">Generar Histograma</button>
+    <a href="{% url 'lista_textos' %}" class="btn btn-secondary">Volver</a>
+</form>
+
+<div class="mt-4">
+    <h4>Ejemplos:</h4>
+    <ul>
+        <li><strong>n=1:</strong> Unigramas (palabras individuales)</li>
+        <li><strong>n=2:</strong> Bigramas (pares de palabras: "la pelota")</li>
+        <li><strong>n=3:</strong> Trigramas (tripletas: "la pelota grande")</li>
+        <li><strong>n=4:</strong> Tetragramas, etc.</li>
+    </ul>
+</div>
+{% endblock %}
