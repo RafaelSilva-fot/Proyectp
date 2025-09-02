@@ -171,3 +171,4 @@ def histograma_ngramas(request, pk, n):
     plt.savefig(buf, format='png', dpi=120)
     plt.close(fig)
     return HttpResponse(buf.getvalue(), content_type='image/png')
+
