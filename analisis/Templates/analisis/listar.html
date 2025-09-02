@@ -125,7 +125,11 @@
           [ <a href="{{ texto.archivo.url }}">ver .txt</a> ]
           <br>
         <button onclick="mostrarHistograma('{{ texto.id }}')">📊 Ver histograma</button>
-
+            <!-- Añade este botón junto a los existentes -->
+<td>
+    <a href="{% url 'histograma_palabras' texto.pk %}" class="btn btn-sm btn-info">Unigramas</a>
+   <a href="/elegir-ngrama/{{ texto.pk }}/" class="btn btn-sm btn-warning">N-Gramas</a>
+</td>
 </button>
 
 
