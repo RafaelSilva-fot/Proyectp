@@ -1,0 +1,40 @@
+
+{% block content %}
+<h2>MLE de {{ n }}-gramas {% if usar_fronteras %}(con fronteras){% else %}(sin fronteras){% endif %}</h2>
+<p><strong>Texto:</strong> {{ texto.nombre|default:texto.archivo.name }}</p>
+
+<div class="mb-2">
+  <a class="btn btn-sm btn-outline-primary ms-2"
+     href="?{% if usar_fronteras %}{% else %}fronteras=1{% endif %}">
+     {% if usar_fronteras %}Ver sin fronteras{% else %}Ver con fronteras{% endif %}
+  </a>
+</div>
+
+<table class="table table-sm table-striped table-bordered align-middle">
+  <thead class="table-light">
+    <tr>
+      <th>#</th>
+      <th>n-grama</th>
+      {% if n|add:-0 > 1 %}<th>historial</th><th>conteo(historial)</th>{% endif %}
+      <th>conteo(n-grama)</th>
+      <th>prob (MLE)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in filas %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td><code>{{ r.ngrama }}</code></td>
+      {% if n|add:-0 > 1 %}
+        <td><code>{{ r.historial }}</code></td>
+        <td>{{ r.conteo_hist }}</td>
+      {% endif %}
+      <td>{{ r.conteo }}</td>
+      <td>{{ r.prob|floatformat:6 }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6">No hay datos suficientes.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

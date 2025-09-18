@@ -1,0 +1,55 @@
+
+{% block content %}
+<h2>Comparativa de MLE para {{ n }}-gramas</h2>
+<p><strong>Texto:</strong> {{ texto.nombre|default:texto.archivo.name }}</p>
+
+<div class="row">
+  <div class="col-md-6">
+    <h5>Sin fronteras</h5>
+    <table class="table table-sm table-striped table-bordered">
+      <thead class="table-light">
+        <tr>
+          <th>#</th><th>n-grama</th>{% if n|add:-0 > 1 %}<th>historial</th><th>conteo(hist)</th>{% endif %}<th>conteo</th><th>prob</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in sin_fronteras %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td><code>{{ r.ngrama }}</code></td>
+          {% if n|add:-0 > 1 %}<td><code>{{ r.historial }}</code></td><td>{{ r.conteo_hist }}</td>{% endif %}
+          <td>{{ r.conteo }}</td>
+          <td>{{ r.prob|floatformat:6 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">No hay datos.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col-md-6">
+    <h5>Con fronteras (&lt;s&gt;, &lt;/s&gt;)</h5>
+    <table class="table table-sm table-striped table-bordered">
+      <thead class="table-light">
+        <tr>
+          <th>#</th><th>n-grama</th>{% if n|add:-0 > 1 %}<th>historial</th><th>conteo(hist)</th>{% endif %}<th>conteo</th><th>prob</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in con_fronteras %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td><code>{{ r.ngrama }}</code></td>
+          {% if n|add:-0 > 1 %}<td><code>{{ r.historial }}</code></td><td>{{ r.conteo_hist }}</td>{% endif %}
+          <td>{{ r.conteo }}</td>
+          <td>{{ r.prob|floatformat:6 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">No hay datos.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

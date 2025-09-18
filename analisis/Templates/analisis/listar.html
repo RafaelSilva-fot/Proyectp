@@ -124,13 +124,37 @@
           <span class="fecha">{{ texto.fecha_subida }}</span>
           [ <a href="{{ texto.archivo.url }}">ver .txt</a> ]
           <br>
-        <button onclick="mostrarHistograma('{{ texto.id }}')">📊 Ver histograma</button>
-            <!-- Añade este botón junto a los existentes -->
-<td>
-    <a href="{% url 'histograma_palabras' texto.pk %}" class="btn btn-sm btn-info">Unigramas</a>
-   <a href="/elegir-ngrama/{{ texto.pk }}/" class="btn btn-sm btn-warning">N-Gramas</a>
-</td>
-</button>
+       
+            <!-- Selector de N y accesos dinámicos -->
+<div style="margin-top:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+  <label for="n-{{ texto.pk }}">N:</label>
+  <input id="n-{{ texto.pk }}" type="number" min="1" value="2"
+         style="width:70px; padding:6px 8px; border-radius:6px; border:1px solid #ccc;">
+
+  <!-- Unigramas (tu vista de barras por palabra) -->
+  <a href="{% url 'histograma_palabras' texto.pk %}"
+     class="btn-histograma" style="background:#16a085">Unigramas</a>
+
+  
+  <a href="{% url 'elegir_ngrama' texto.pk %}"
+     class="btn-histograma" style="background:#f39c12">Elegir N-gramas</a>
+
+  <a href="#" class="btn-histograma" style="background:#34495e"
+     onclick="goProb({{ texto.pk }}, getN('{{ texto.pk }}'), false); return false;">
+     MLE n-gramas
+  </a>
+
+  <a href="#" class="btn-histograma" style="background:#2c3e50"
+     onclick="goProb({{ texto.pk }}, getN('{{ texto.pk }}'), true); return false;">
+     MLE n-gramas + fronteras
+  </a>
+
+  <a href="#" class="btn-histograma" style="background:#7f8c8d"
+     onclick="goComparar({{ texto.pk }}, getN('{{ texto.pk }}')); return false;">
+     Comparar (n-gramas)
+  </a>
+</div>
+
 
 
         </li>
@@ -157,6 +181,31 @@ function mostrarHistograma(idTexto) {
     imagen.src = url + "?t=" + new Date().getTime();
     cuadro.style.display = "block";
 }
+</script>
+<script>
+function getN(pk){
+  const el = document.getElementById('n-' + pk);
+  let n = parseInt((el && el.value) ? el.value : '2', 10);
+  if (isNaN(n)) n = 2;
+  if (n < 1) n = 1;
+  el.value = n; // normaliza en pantalla
+  return n;
+}
+
+// Usa las rutas con name y sustituye parámetros sin hardcodear prefijos
+function goProb(pk, n, conFronteras){
+  let url = "{% url 'prob_ngramas' 0 1 %}";
+  url = url.replace('/0/','/' + pk + '/').replace('/1/','/' + n + '/');
+  if (conFronteras) url += '?fronteras=1';
+  window.location.href = url;
+}
+
+function goComparar(pk, n){
+  let url = "{% url 'comparar_prob_ngramas' 0 1 %}";
+  url = url.replace('/0/','/' + pk + '/').replace('/1/','/' + n + '/');
+  window.location.href = url;
+}
+
 </script>
 
 </body>

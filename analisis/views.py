@@ -12,12 +12,19 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
 from io import BytesIO
 from django import forms  # ✅ AÑADE ESTA LÍNEA
-# Añade esta clase ANTES de las vistas
+#--------------------------------extra
+from typing import List, Tuple, Dict
+from django.utils.html import escape
+from django.urls import reverse
+from django.http import StreamingHttpResponse
+import csv
+
+
+
 class NgramForm(forms.Form):
     n_valor = forms.IntegerField(
         label='Valor de n para n-gramas',
         min_value=1,
-        max_value=10,
         initial=1,
         help_text='1: Unigramas, 2: Bigramas, 3: Trigramas, etc.'
     )
@@ -37,6 +44,92 @@ def generar_ngramas(tokens, n):
         return tokens  # Para unigramas, devuelve las palabras individuales
     return [' '.join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)]
 
+#----------------------Extra-------------------
+# ======================
+# UTILIDADES PARA MLE
+# ======================
+SENT_START = "<s>"
+SENT_END = "</s>"
+
+def tokenizar_palabras(texto: str) -> List[str]:
+    tokens = re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ']+", texto)
+    return [normalizar_palabra(t) for t in tokens if len(t) > 0]
+
+def segmentar_oraciones(texto: str):
+    # Divide por ., !, ?, … (puntos suspensivos) y tokeniza cada oración
+    oraciones_raw = re.split(r"[.!?…]+", texto)
+    res = []
+    for oracion in oraciones_raw:
+        toks = re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ']+", oracion)
+        toks = [normalizar_palabra(t) for t in toks if len(t) > 0]
+        if toks:
+            res.append(toks)
+    return res
+
+def aplicar_fronteras(oraciones_tokens, n: int):
+    # Inserta (n-1) <s> al inicio y un </s> al final de cada oración
+    k = max(0, n - 1)
+    stream = []
+    for toks in oraciones_tokens:
+        stream.extend([SENT_START] * k)
+        stream.extend(toks)
+        stream.append(SENT_END)
+    return stream
+
+def ngramas_y_historial(tokens: List[str], n: int):
+    # Devuelve Counter de n-gramas y de historiales (n-1)-gramas
+    if n <= 0:
+        raise ValueError("n debe ser mayor a 0")
+    if n == 1:
+        unis = Counter(tokens)
+        total = sum(unis.values())
+        return unis, Counter({"": total})
+    ngrams = Counter()
+    histories = Counter()
+    L = len(tokens)
+    for i in range(L - n + 1):
+        window = tokens[i:i+n]
+        hist = tuple(window[:-1])
+        ngram = tuple(window)
+        ngrams[ngram] += 1
+        histories[hist] += 1
+    return ngrams, histories
+
+def mle_probabilidades(tokens: List[str], n: int):
+    # Para n>1: P = count(ngram)/count(historial) ; para n=1: count/total
+    ngrams, histories = ngramas_y_historial(tokens, n)
+    filas = []
+    if n == 1:
+        total = sum(ngrams.values())
+        for ng, c in ngrams.most_common():
+            prob = c / total if total > 0 else 0.0
+            filas.append({"ngrama": ng, "conteo": c, "historial": "", "conteo_hist": total, "prob": prob})
+        return filas
+    for ng, c in ngrams.most_common():
+        hist = tuple(list(ng)[:-1])
+        ch = histories.get(hist, 0)
+        prob = (c / ch) if ch > 0 else 0.0
+        filas.append({
+            "ngrama": " ".join(ng),
+            "conteo": c,
+            "historial": " ".join(hist),
+            "conteo_hist": ch,
+            "prob": prob
+        })
+    filas.sort(key=lambda r: (-r["conteo"], -r["prob"]))
+    return filas
+
+def preparar_tokens_para_mle(contenido: str, n: int, usar_fronteras: bool):
+    # Construye stream de tokens según el flag de fronteras
+    if usar_fronteras:
+        oraciones = segmentar_oraciones(contenido)
+        return aplicar_fronteras(oraciones, n)
+    else:
+        return tokenizar_palabras(contenido)
+
+
+
+#-------------------------Extra---------------
 def histograma_palabras(request, pk):
     """Devuelve una imagen PNG con todas las palabras encontradas en el texto."""
     texto = get_object_or_404(TextoAnalizado, pk=pk)
@@ -171,3 +264,78 @@ def histograma_ngramas(request, pk, n):
     plt.savefig(buf, format='png', dpi=120)
     plt.close(fig)
     return HttpResponse(buf.getvalue(), content_type='image/png')
+
+#----------------Extra -------------------------
+def prob_ngramas(request, pk, n):
+    """Tabla HTML con MLE para n-gramas. Añade ?fronteras=1 para usar <s>, </s>."""
+    n = int(n)
+    texto = get_object_or_404(TextoAnalizado, pk=pk)
+    with open(texto.archivo.path, 'r', encoding='utf-8', errors='ignore') as f:
+        contenido = f.read()
+
+    usar_fronteras = request.GET.get('fronteras') in ('1', 'true', 'True', 'yes', 'on')
+    tokens = preparar_tokens_para_mle(contenido, n, usar_fronteras)
+    if len(tokens) < n:
+        return HttpResponse(f"No hay suficientes tokens para generar {n}-gramas.", status=400)
+
+    filas = mle_probabilidades(tokens, n)
+    top = int(request.GET.get('top', '100'))
+    filas = filas[:top]
+
+    return render(request, "analisis/prob_ngramas.html", {
+        "texto": texto, "n": n, "usar_fronteras": usar_fronteras, "filas": filas,
+    })
+
+def comparar_prob_ngramas(request, pk, n):
+    """Comparación lado a lado: sin fronteras vs con fronteras."""
+    n = int(n)
+    texto = get_object_or_404(TextoAnalizado, pk=pk)
+    with open(texto.archivo.path, 'r', encoding='utf-8', errors='ignore') as f:
+        contenido = f.read()
+
+    tokens_a = preparar_tokens_para_mle(contenido, n, usar_fronteras=False)
+    filas_a = mle_probabilidades(tokens_a, n) if len(tokens_a) >= n else []
+
+    tokens_b = preparar_tokens_para_mle(contenido, n, usar_fronteras=True)
+    filas_b = mle_probabilidades(tokens_b, n) if len(tokens_b) >= n else []
+
+    top = int(request.GET.get('top', '50'))
+    filas_a = filas_a[:top]
+    filas_b = filas_b[:top]
+
+    return render(request, "analisis/comparar_prob_ngramas.html", {
+        "texto": texto, "n": n, "sin_fronteras": filas_a, "con_fronteras": filas_b,
+    })
+
+def prob_ngramas_csv(request, pk, n):
+    """Descarga CSV de la tabla MLE (con o sin fronteras)."""
+    n = int(n)
+    texto = get_object_or_404(TextoAnalizado, pk=pk)
+    with open(texto.archivo.path, 'r', encoding='utf-8', errors='ignore') as f:
+        contenido = f.read()
+
+    usar_fronteras = request.GET.get('fronteras') in ('1','true','True','yes','on')
+    tokens = preparar_tokens_para_mle(contenido, n, usar_fronteras)
+    if len(tokens) < n:
+        return HttpResponse(f"No hay suficientes tokens para generar {n}-gramas.", status=400)
+
+    filas = mle_probabilidades(tokens, n)
+    top = int(request.GET.get('top', '100'))
+    filas = filas[:top]
+
+    def rows():
+        yield ["n", "usar_fronteras", "n-grama", "conteo", "historial", "conteo_historial", "probabilidad"]
+        for r in filas:
+            yield [n, int(usar_fronteras), r["ngrama"], r["conteo"], r["historial"], r["conteo_hist"], f'{r["prob"]:.10f}']
+
+    class Echo:
+        def write(self, value): return value
+
+    writer = csv.writer(Echo())
+    resp = StreamingHttpResponse((writer.writerow(row) for row in rows()), content_type="text/csv")
+    resp['Content-Disposition'] = f'attachment; filename="mle_{pk}_{n}_{"fronteras" if usar_fronteras else "sin_fronteras"}.csv"'
+    return resp
+
+
+
+#----------------Extra--------------------------
