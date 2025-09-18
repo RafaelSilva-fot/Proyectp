@@ -260,4 +260,77 @@ def histograma_ngramas(request, pk, n):
     plt.close(fig)
     return HttpResponse(buf.getvalue(), content_type='image/png')
 
+#----------------Extra -------------------------
+def prob_ngramas(request, pk, n):
+    """Tabla HTML con MLE para n-gramas. Añade ?fronteras=1 para usar <s>, </s>."""
+    n = int(n)
+    texto = get_object_or_404(TextoAnalizado, pk=pk)
+    with open(texto.archivo.path, 'r', encoding='utf-8', errors='ignore') as f:
+        contenido = f.read()
 
+    usar_fronteras = request.GET.get('fronteras') in ('1', 'true', 'True', 'yes', 'on')
+    tokens = preparar_tokens_para_mle(contenido, n, usar_fronteras)
+    if len(tokens) < n:
+        return HttpResponse(f"No hay suficientes tokens para generar {n}-gramas.", status=400)
+
+    filas = mle_probabilidades(tokens, n)
+    top = int(request.GET.get('top', '100'))
+    filas = filas[:top]
+
+    return render(request, "analisis/prob_ngramas.html", {
+        "texto": texto, "n": n, "usar_fronteras": usar_fronteras, "filas": filas,
+    })
+
+def comparar_prob_ngramas(request, pk, n):
+    """Comparación lado a lado: sin fronteras vs con fronteras."""
+    n = int(n)
+    texto = get_object_or_404(TextoAnalizado, pk=pk)
+    with open(texto.archivo.path, 'r', encoding='utf-8', errors='ignore') as f:
+        contenido = f.read()
+
+    tokens_a = preparar_tokens_para_mle(contenido, n, usar_fronteras=False)
+    filas_a = mle_probabilidades(tokens_a, n) if len(tokens_a) >= n else []
+
+    tokens_b = preparar_tokens_para_mle(contenido, n, usar_fronteras=True)
+    filas_b = mle_probabilidades(tokens_b, n) if len(tokens_b) >= n else []
+
+    top = int(request.GET.get('top', '50'))
+    filas_a = filas_a[:top]
+    filas_b = filas_b[:top]
+
+    return render(request, "analisis/comparar_prob_ngramas.html", {
+        "texto": texto, "n": n, "sin_fronteras": filas_a, "con_fronteras": filas_b,
+    })
+
+def prob_ngramas_csv(request, pk, n):
+ 
+    n = int(n)
+    texto = get_object_or_404(TextoAnalizado, pk=pk)
+    with open(texto.archivo.path, 'r', encoding='utf-8', errors='ignore') as f:
+        contenido = f.read()
+
+    usar_fronteras = request.GET.get('fronteras') in ('1','true','True','yes','on')
+    tokens = preparar_tokens_para_mle(contenido, n, usar_fronteras)
+    if len(tokens) < n:
+        return HttpResponse(f"No hay suficientes tokens para generar {n}-gramas.", status=400)
+
+    filas = mle_probabilidades(tokens, n)
+    top = int(request.GET.get('top', '100'))
+    filas = filas[:top]
+
+    def rows():
+        yield ["n", "usar_fronteras", "n-grama", "conteo", "historial", "conteo_historial", "probabilidad"]
+        for r in filas:
+            yield [n, int(usar_fronteras), r["ngrama"], r["conteo"], r["historial"], r["conteo_hist"], f'{r["prob"]:.10f}']
+
+    class Echo:
+        def write(self, value): return value
+
+    writer = csv.writer(Echo())
+    resp = StreamingHttpResponse((writer.writerow(row) for row in rows()), content_type="text/csv")
+    resp['Content-Disposition'] = f'attachment; filename="mle_{pk}_{n}_{"fronteras" if usar_fronteras else "sin_fronteras"}.csv"'
+    return resp
+
+
+
+#----------------Extra--------------------------
