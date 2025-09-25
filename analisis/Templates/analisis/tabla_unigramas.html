@@ -1,0 +1,47 @@
+
+{% block content %}
+<h2>Tabla de frecuencias (unigramas)</h2>
+
+<label>
+  <input type="checkbox" id="chk-fron" {% if fronteras %}checked{% endif %}
+         onchange="toggleFron({{ texto.pk }})">
+  Incluir &lt;s&gt; y &lt;/s&gt;
+</label>
+
+<p><strong>Texto:</strong> {{ texto.nombre|default:texto.archivo.name }}</p>
+<p>
+  Total de tokens : {{ total }} 
+  {% if fronteras %} · <em>con fronteras</em>{% else %} · <em>sin fronteras</em>{% endif %}
+</p>
+
+<table class="table table-sm table-striped table-bordered">
+  <thead class="table-light">
+    <tr>
+      <th style="width:70px">#</th>
+      <th>Palabra</th>
+      <th style="width:120px">Conteo</th>
+      <th style="width:140px">% del total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in filas %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td><code>{{ r.token|escape }}</code></td>
+        <td>{{ r.conteo }}</td>
+        <td>{{ r.pct|floatformat:3 }}%</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4">Sin datos.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script>
+function toggleFron(pk){
+  const on = document.getElementById('chk-fron').checked ? '1' : '0';
+  const url = "{% url 'tabla_unigramas' texto.pk %}" + "?fronteras=" + on;
+  window.location.href = url;
+}
+</script>
+{% endblock %}

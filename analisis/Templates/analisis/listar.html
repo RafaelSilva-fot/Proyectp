@@ -122,18 +122,42 @@
         <li>
           <span class="texto-titulo">{{ texto.nombre }}</span> 
           <span class="fecha">{{ texto.fecha_subida }}</span>
+    
+          <span id="api-preview-{{ texto.pk }}" data-url="{% url 'api_contenido' texto.pk %}" hidden></span>
+          <span id="api-sug-{{ texto.pk }}"     data-url="{% url 'api_sugerencias' texto.pk %}" hidden></span>
+          
+         
+       
+<div class="predictor-wrap" style="margin:10px 0 14px 0;">
+
+  <input id="pred-input-{{ texto.pk }}"
+         type="text"
+         placeholder="Escribe aquí y te sugiero la siguiente palabra del mismo texto…"
+         onfocus="cargarPreview({{ texto.pk }})"
+         oninput="pedirSugerencias({{ texto.pk }})"
+         style="width:100%; max-width:680px; padding:10px 12px; border:1px solid #ccc; border-radius:8px;">
+
+ 
+  <div id="pred-sugs-{{ texto.pk }}" style="position:relative; max-width:680px;">
+
+   <div class="sug-list" id="pred-list-{{ texto.pk }}"
+     style="display:none; position:absolute; z-index:50; left:0; right:0; background:#fff; border:1px solid #ddd; border-radius:8px; margin-top:4px; overflow:hidden;">
+
+  </div>
+
+
+  <div id="preview-{{ texto.pk }}"
+     style="display:none; margin-top:10px; max-width:680px; border:1px solid #e5e7eb; border-radius:8px; padding:10px; background:#fafafa; white-space:pre-wrap;">
+</div>
+</div>
+
           [ <a href="{{ texto.archivo.url }}">ver .txt</a> ]
           <br>
-       
-            <!-- Selector de N y accesos dinámicos -->
+
 <div style="margin-top:8px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
   <label for="n-{{ texto.pk }}">N:</label>
   <input id="n-{{ texto.pk }}" type="number" min="1" value="2"
          style="width:70px; padding:6px 8px; border-radius:6px; border:1px solid #ccc;">
-
-  <!-- Unigramas (tu vista de barras por palabra) -->
-  <a href="{% url 'histograma_palabras' texto.pk %}"
-     class="btn-histograma" style="background:#16a085">Unigramas</a>
 
   
   <a href="{% url 'elegir_ngrama' texto.pk %}"
@@ -144,15 +168,15 @@
      MLE n-gramas
   </a>
 
-  <a href="#" class="btn-histograma" style="background:#2c3e50"
-     onclick="goProb({{ texto.pk }}, getN('{{ texto.pk }}'), true); return false;">
-     MLE n-gramas + fronteras
-  </a>
-
   <a href="#" class="btn-histograma" style="background:#7f8c8d"
      onclick="goComparar({{ texto.pk }}, getN('{{ texto.pk }}')); return false;">
      Comparar (n-gramas)
   </a>
+
+<a href="#" class="btn-histograma" style="background:#0ea5e9"
+   onclick="goTabla({{ texto.pk }}, getN('{{ texto.pk }}')); return false;">
+   Tabla n-gramas
+</a>
 </div>
 
 
@@ -174,7 +198,7 @@ function mostrarHistograma(idTexto) {
     const cuadro = document.getElementById("cuadro-histograma");
     const imagen = document.getElementById("imagen-histograma");
 
-    // Usamos la URL de Django y luego sustituimos el número dinámicamente
+
     let url = "{% url 'histograma_palabras' 0 %}";
     url = url.replace("0", idTexto);
 
@@ -183,30 +207,111 @@ function mostrarHistograma(idTexto) {
 }
 </script>
 <script>
-function getN(pk){
+function urlPreview(pk){
+  const el = document.getElementById('api-preview-' + pk);
+  return el ? el.dataset.url : '';
+}
+function urlSugerencias(pk){
+  const el = document.getElementById('api-sug-' + pk);
+  return el ? el.dataset.url : '';
+}
+
+async function cargarPreview(pk){
+  const box = document.getElementById('preview-' + pk);
+  if (!box || box.dataset.loaded === '1') return;
+  try {
+    const base = urlPreview(pk);
+    if (!base) throw new Error('No hay URL de preview');
+    const res  = await fetch(base + '?max=all');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    box.textContent = data.snippet || '(archivo vacío)';
+    box.style.display = 'block';
+    box.dataset.loaded = '1';
+  } catch(e){
+    console.error('Preview error:', e);
+    box.textContent = 'No se pudo cargar el texto.';
+    box.style.display = 'block';
+  }
+}
+
+let predTimers = {};
+async function pedirSugerencias(pk){
+  const input = document.getElementById('pred-input-' + pk);
+  const list  = document.getElementById('pred-list-' + pk);
+  if (!input || !list) return;
+
+  if (predTimers[pk]) clearTimeout(predTimers[pk]);
+  predTimers[pk] = setTimeout(async () => {
+    try {
+      const q = input.value || '';
+      const n = (typeof getN === 'function') ? getN(pk) : 2;
+      const base = urlSugerencias(pk);
+      if (!base) throw new Error('No hay URL de sugerencias');
+
+      const res  = await fetch(`${base}?q=${encodeURIComponent(q)}&n=${encodeURIComponent(n)}&fronteras=1&top=8`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+
+      const items = (data.items || []).map(it => {
+        const pct = (it.prob * 100).toFixed(1) + "%";
+        return `<div class="sug-item" onclick="insertarSugerencia(${pk}, '${it.word.replace(/'/g,"\\'")}')"
+                  style="display:flex; justify-content:space-between; gap:8px; padding:8px 10px; cursor:pointer;">
+                  <span>${it.word}</span><span style="color:#6b7280">${pct}</span>
+                </div>`;
+      }).join('');
+
+      list.innerHTML = items || `<div style="padding:8px 10px; color:#6b7280;">Sin sugerencias</div>`;
+      list.style.display = 'block';
+    } catch (e) {
+      console.error('Sugerencias error:', e);
+      list.innerHTML = `<div style="padding:8px 10px; color:#ef4444;">Error cargando sugerencias</div>`;
+      list.style.display = 'block';
+    }
+  }, 150);
+}
+
+function insertarSugerencia(pk, palabra){
+  const input = document.getElementById('pred-input-' + pk);
+  if (!input) return;
+  let v = input.value || '';
+  if (v && !/\s$/.test(v)) v += ' ';
+  input.value = v + palabra + ' ';
+  input.focus();
+  pedirSugerencias(pk);
+}
+</script>
+<script>
+window.getN = function(pk){
   const el = document.getElementById('n-' + pk);
   let n = parseInt((el && el.value) ? el.value : '2', 10);
-  if (isNaN(n)) n = 2;
-  if (n < 1) n = 1;
-  el.value = n; // normaliza en pantalla
+  if (isNaN(n) || n < 1) n = 1;
+  if (el) el.value = n;
   return n;
-}
+};
 
-// Usa las rutas con name y sustituye parámetros sin hardcodear prefijos
-function goProb(pk, n, conFronteras){
-  let url = "{% url 'prob_ngramas' 0 1 %}";
-  url = url.replace('/0/','/' + pk + '/').replace('/1/','/' + n + '/');
-  if (conFronteras) url += '?fronteras=1';
+window.goProb = function(pk, n){
+  var url = "{% url 'prob_ngramas' 0 1 %}"
+              .replace('/0/', '/' + pk + '/')
+              .replace('/1/', '/' + n + '/');
   window.location.href = url;
-}
+};
 
-function goComparar(pk, n){
-  let url = "{% url 'comparar_prob_ngramas' 0 1 %}";
-  url = url.replace('/0/','/' + pk + '/').replace('/1/','/' + n + '/');
+window.goComparar = function(pk, n){
+  var url = "{% url 'comparar_prob_ngramas' 0 1 %}"
+              .replace('/0/', '/' + pk + '/')
+              .replace('/1/', '/' + n + '/');
   window.location.href = url;
-}
+};
 
+window.goTabla = function(pk, n){
+  var url = "{% url 'tabla_ngramas' 0 1 %}"
+              .replace('/0/', '/' + pk + '/')
+              .replace('/1/', '/' + n + '/');
+  window.location.href = url;
+};
 </script>
+
 
 </body>
 </html>

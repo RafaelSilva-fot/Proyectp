@@ -1,0 +1,58 @@
+
+{% block content %}
+<h2>Tabla de frecuencias ({{ n }}-gramas)</h2>
+<p>Total de {{ n }}-gramas: {{ total }} ·
+  {% if fronteras %}<em>con fronteras</em>{% else %}<em>sin fronteras</em>{% endif %}
+</p>
+
+
+<div style="display:flex;gap:10px;align-items:center;margin:10px 0 14px 0;">
+  <label for="ngram-n"><strong>N:</strong></label>
+  <input id="ngram-n" type="number" min="1" value="{{ n }}"
+         style="width:80px;padding:6px 8px;border:1px solid #ccc;border-radius:6px;">
+  <label style="margin-left:10px;">
+    <input type="checkbox" id="chk-fron" {% if fronteras %}checked{% endif %}>
+    Incluir &lt;s&gt; y &lt;/s&gt;
+  </label>
+  <button class="btn btn-sm btn-primary" onclick="irN({{ texto.pk }})">Ver</button>
+</div>
+
+<script>
+function irN(pk){
+  const n   = document.getElementById('ngram-n').value || 1;
+  const on  = document.getElementById('chk-fron').checked ? '1' : '0';
+  let url = "{% url 'tabla_ngramas' 0 1 %}";
+  url = url.replace('/0/','/' + pk + '/').replace('/1/','/' + n + '/');
+  window.location.href = url + "?fronteras=" + on;
+}
+</script>
+
+<p><strong>Texto:</strong> {{ texto.nombre|default:texto.archivo.name }}</p>
+<p>
+  Total de {{ n }}-gramas: {{ total }} 
+  {% if fronteras %} · <em>con fronteras</em>{% else %} · <em>sin fronteras</em>{% endif %}
+</p>
+
+<table class="table table-sm table-striped table-bordered">
+  <thead class="table-light">
+    <tr>
+      <th style="width:70px">#</th>
+      <th>{{ n }}-grama</th>
+      <th style="width:120px">Conteo</th>
+      <th style="width:140px">% del total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in filas %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td><code>{{ r.ngrama|escape }}</code></td>
+      <td>{{ r.conteo }}</td>
+      <td>{{ r.pct|floatformat:3 }}%</td>
+    </tr>
+    {% empty %}
+      <tr><td colspan="4">Sin datos.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
